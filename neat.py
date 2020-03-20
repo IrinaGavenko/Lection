@@ -3,7 +3,6 @@ import random
 import numpy as np
 from copy import deepcopy
 
-
 from snn2 import Network, Connection, InputNeuron, HiddenNeuron, OutputNeuron
 from net_creator import BrainFactory
 
@@ -55,7 +54,7 @@ class Species:
             s.fitness_history.append(s.fitness)
             s.adjusted_fitness = None
 
-            if prev_fitness is None or s.fitness>prev_fitness:
+            if prev_fitness is None or s.fitness > prev_fitness:
                 s.last_improved = generation
 
             species_data.append(s)
@@ -91,10 +90,11 @@ class Species:
         return result
 
 
-
 class PopulationPool:
-    def __init__(self, population_size, net_config, env_generator, net_evaluator, nCPU=1):
+    def __init__(self, population_size, net_config, env_generator, net_evaluator, nCPU=1, verbose=False,
+                 initial_population=None):
         self.nCPU = nCPU
+        self.verbose = verbose
         self.best_net = None
         self.population = []
         self.species = []
@@ -102,8 +102,13 @@ class PopulationPool:
         self.env_generator = env_generator
         self.net_evaluator = net_evaluator
         self.population_size = population_size
-        self.initilize_populaion()
-
+        if initial_population:
+            self.population = initial_population
+            for new_net in self.population:
+                self.speciate(new_net, 0)
+            self.update_best()
+        else:
+            self.initilize_populaion()
 
     def initilize_populaion(self):
         factory = BrainFactory(self.net_config)
@@ -114,7 +119,6 @@ class PopulationPool:
             self.speciate(new_net, 0)
 
         self.update_best()
-
 
     def speciate(self, net, generation_i):
         """
@@ -130,23 +134,20 @@ class PopulationPool:
                 return
 
         # Did not match any current species. Create a new one
-        new_species = Species(len(self.species), net, generation_i) # len(self.species) is a new auto-incrementing id
+        new_species = Species(len(self.species), net, generation_i)  # len(self.species) is a new auto-incrementing id
         net.species = new_species.id
         new_species.members.append(net)
         self.species.append(new_species)
 
-
     def update_best(self):
         best_i = max(enumerate(self.population), key=lambda x: self.population[x[0]].score)[0]
         self.best_net = self.population[best_i]
-
 
     def score_net(self, net):
         if net.score is None:
             with self.env_generator() as env:
                 net.score = self.net_evaluator(env, net)
         return net.score
-
 
     def crossover(self, net_1, net_2):
         """
@@ -156,14 +157,12 @@ class PopulationPool:
         :param config: Experiment's configuration class
         :return: A child Genome Instance
         """
-
         child = Network(self.net_config)
         inputLayer = []
         hiddenLayer = []
         outputLayer = []
         all_neurons = []
         best_parent, other_parent = self.order_parents(net_1, net_2)
-
 
         # Crossover Nodes
         # Randomly add matching genes from both parents
@@ -182,15 +181,16 @@ class PopulationPool:
             else:
                 child_neuron = neuron
 
-            # if there we some state in neuron to inherit here transmission should have been done.
-            # now spike neuron doesn't have any specific INDIVIDUAL fixed parameters.
+            # this is rediculous... but ok, if there we some state in neuron to inherit
+            # here transmission should have been done.
+            # now spike neuron doesn't have any specific INDIVIDUAL parameters - but it will have (timedelays...)
             if child_neuron.type == 'input':
                 child_neuron = InputNeuron(child_neuron.id)
                 inputLayer.append(child_neuron)
             elif child_neuron.type == 'output':
                 child_neuron = OutputNeuron(child_neuron.id)
                 outputLayer.append(child_neuron)
-            else: # hidden
+            else:  # hidden
                 child_neuron = HiddenNeuron(child_neuron.id)
                 hiddenLayer.append(child_neuron)
             all_neurons.append(child_neuron)
@@ -200,27 +200,26 @@ class PopulationPool:
         child.addLayer(outputLayer)
         child.neurons = all_neurons
         child.neuron_ids = {n.id for n in all_neurons}
-        child.neuron_num = len(all_neurons)
-
+        child.neuron_num = len(all_neurons) + 1
 
         # Crossover connections
         # Randomly add matching genes from both parents - remember we may have multiple synapses in each connection
         for connection in best_parent.connections:
             matching_connection = other_parent.get_connection(connection.innov_num)
 
-            if matching_connection is not None:
+            if matching_connection is not None:  # his can lead to breaking way to outputs neurons
                 # Randomly choose where to inherit gene from
-                if(random.choice([True, False]) and
-                    child.get_neuron(matching_connection.input.id) is not None and
-                    child.get_neuron(matching_connection.output.id) is not None):
-                    child_gene = matching_connection
+                if (random.choice([True, False]) and
+                        child.get_neuron(matching_connection.input.id) is not None and
+                        child.get_neuron(matching_connection.output.id) is not None):
+                    inherited_connection = matching_connection
                 else:
-                    child_gene = connection # deepcopy is useless because of inner structure of connection - it has links
+                    inherited_connection = connection  # deepcopy is useless because of inner structure of connection - it has links
 
             # No matching gene - is disjoint or excess
             # Inherit disjoint and excess genes from best parent
             else:
-                child_gene = connection
+                inherited_connection = connection
 
             # clone  connection object and install it
             # here will be some checks on existing of needed neurons with ids for binding a new connection
@@ -228,19 +227,19 @@ class PopulationPool:
             # so there may exist matching by id connection, but it may connect very distant neurons, that's ids
             # doesn't exist in child (child inherits not more and not less number of neurons best parent has).
             # how to behace here - who know, may be just ignore or take the best parent connection - yes, ok, this way look upstairs - solved.
-
             # check-get input-neuron.
-            child_input_neuron = child.get_neuron(connection.input.id)
+            child_input_neuron = child.get_neuron(inherited_connection.input.id)
             # if child_input_neuron is None:
             #     raise Exception('No neuron found in child with id: {}'.format(connection.input.id))
 
             # check-get output-neuron
-            child_output_neuron = child.get_neuron(connection.output.id)
+            child_output_neuron = child.get_neuron(inherited_connection.output.id)
             # if child_output_neuron is None:
             #     raise Exception('No neuron found in child with id: {}'.format(connection.output.id))
 
             # clone connection to child
-            new_connection = Connection(deepcopy(connection.synapses), child_input_neuron,  child_output_neuron, connection.innov_num)
+            new_connection = Connection(deepcopy(inherited_connection.synapses), child_input_neuron,
+                                        child_output_neuron, inherited_connection.innov_num)
             child.connections.append(new_connection)
             child.innov_nums.add(new_connection.innov_num)
             child.innov_num += 1
@@ -253,9 +252,7 @@ class PopulationPool:
                 if is_reenabeled or enabled_in_best_parent:
                     new_connection.enabled = True
 
-
         return child
-
 
     def order_parents(self, net_1, net_2):
         """
@@ -265,6 +262,7 @@ class PopulationPool:
         :return: Two Genome Instances
         """
 
+        # genotype.cpp line 2043 - heh
         # Figure out which genotype is better
         # The worse genotype should not be allowed to add excess or disjoint genes
         # If they are the same, use the smaller one's disjoint and excess genes
@@ -293,7 +291,6 @@ class PopulationPool:
 
         return best_parent, other_parent
 
-
     def mutate(self, net):
         """
         Applies connection and structural mutations at proper rate.
@@ -315,15 +312,15 @@ class PopulationPool:
                         connection.synapses[s_i][1] = np.random.normal(0, 1, 1).tolist()[0]
 
         if random.uniform(0, 1) < self.net_config['add_node_mutation_rate']:
-            net.add_node_mutation()
+            net.add_node_mutation()  # 123
 
         if random.uniform(0, 1) < self.net_config['add_connection_mutation_rate']:
-            net.add_connection_mutation()
-
-
+            net.add_connection_mutation()  # 123
 
     def run(self, generations_number):
-        for generation_i in range(generations_number): # new experiment
+        for generation_i in range(generations_number):  # new experiment
+            if self.verbose:
+                print("cycle {generation_i}/{generations_number}")
 
             # Reproduce - make scpecies and mere the fitnesses-scores
             all_fitnesses = []
@@ -335,11 +332,10 @@ class PopulationPool:
                     all_fitnesses.extend(net.score for net in species.members)
                     remaining_species.append(species)
 
-
             min_fitness = min(all_fitnesses)
             max_fitness = max(all_fitnesses)
 
-            fit_range = max(1.0, (max_fitness-min_fitness))
+            fit_range = max(1.0, (max_fitness - min_fitness))
             for species in remaining_species:
                 # Set adjusted fitness
                 avg_species_fitness = np.mean([g.score for g in species.members])
@@ -350,9 +346,9 @@ class PopulationPool:
 
             # Get the number of offspring for each species
             new_population = []
-            for species in remaining_species: # let them all have children - in proportion to species fitnesses
+            for species in remaining_species:  # let them all have children - in proportion to species fitnesses
                 if species.adjusted_fitness > 0:
-                    size = max(2, int((species.adjusted_fitness/adj_fitness_sum) * self.population_size))
+                    size = max(2, int((species.adjusted_fitness / adj_fitness_sum) * self.population_size))
                 else:
                     size = 2
 
@@ -362,7 +358,7 @@ class PopulationPool:
                 species.members = []  # reset
 
                 # save top individual in species
-                new_population.append(cur_members[0]) # this is the net obj
+                new_population.append(cur_members[0])  # this is the net obj
                 size -= 1
 
                 # Only allow top x% to reproduce
@@ -370,18 +366,39 @@ class PopulationPool:
                 purge_index = max(2, purge_index)
                 cur_members = cur_members[:purge_index]
 
-                for _ in range(size): # among best from species
+                for _ in range(size):  # among best from species
                     parent_1 = random.choice(cur_members)
                     parent_2 = random.choice(cur_members)
 
-                    child_net = self.crossover(parent_1, parent_2)
-                    self.mutate(child_net)
+                    try:
+                        child_net = self.crossover(parent_1, parent_2)
+                    except AttributeError as e:
+                        print(str(e))
+                        import json
+                        with open(file='crossover_error.json', mode='w') as f:
+                            json.dump({
+                                'parent_1': parent_1.serialize(),
+                                'parent_2': parent_2.serialize(),
+                            }, f)
+                        raise e
+
+                    try:
+                        self.mutate(child_net)
+                    except AttributeError as e:
+                        print(str(e))
+                        import json
+                        with open(file='child_mutate_error.json', mode='w') as f:
+                            json.dump({
+                                'child_net': child_net.serialize(),
+                            }, f)
+                        raise e
+
                     new_population.append(child_net)
 
             # Set new population
             self.population = new_population
             for net in self.population:
-                self.score_net(net)
+                self.score_net(net)  # here some of them are already scored
 
             # Speciate
             for net in self.population:
