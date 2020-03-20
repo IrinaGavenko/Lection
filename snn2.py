@@ -275,15 +275,11 @@ class Network:
         out receives the same weight as the old connection.
         """
         # Get new_node id
-        middle_neuron = self.add_neuron('hidden')
-        # Get a random existing connection
-        connection = random.choice(self.connections)
-        first_neuron = connection.input
-        last_neuron = connection.output
+        ### YOUR CODE ###
 
-        connection.enable = False
-        self.add_connection(first_neuron, middle_neuron)
-        self.add_connection(middle_neuron, last_neuron)
+        # Get a random existing connection
+        ### YOUR CODE ###
+
 
 
     def creates_cycle(self, node_in_id, node_out_id):
@@ -333,15 +329,7 @@ class Network:
         connecting two previously unconnected nodes.
         """
 
-        potential_inputs = [n.id for n in self.neurons if n.type != 'output']
-        potential_outputs = [n.id for n in self.neurons if n.type != 'input']
-
-        if len(potential_outputs) is not 0 and len(potential_inputs) is not 0:
-            neuron_in_id = random.choice(potential_inputs)
-            neuron_out_id = random.choice(potential_outputs)
-
-            if self._is_valid_connection(neuron_in_id, neuron_out_id):
-                self.add_connection(self.get_neuron(neuron_in_id), self.get_neuron(neuron_out_id))
+        ### YOUR CODE ###
 
     def get_num_excess_genes(self, other):
         num_excess = 0

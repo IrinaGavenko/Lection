@@ -167,22 +167,10 @@ class PopulationPool:
         # Crossover Nodes
         # Randomly add matching genes from both parents
         for neuron in best_parent.neurons:
-            matching_neuron = other_parent.get_neuron(neuron.id)
 
-            if matching_neuron is not None:
-                # Randomly choose where to inherit gene from
-                if random.choice([True, False]):
-                    child_neuron = neuron
-                else:
-                    child_neuron = matching_neuron
+            ### YOUR CODE ###
 
-            # No matching gene - is disjoint or excess
-            # Inherit disjoint and excess genes from best parent
-            else:
-                child_neuron = neuron
-
-            # this is rediculous... but ok, if there we some state in neuron to inherit
-            # here transmission should have been done.
+            # if there we some state in neuron to inherit here transmission should have been done.
             # now spike neuron doesn't have any specific INDIVIDUAL parameters - but it will have (timedelays...)
             if child_neuron.type == 'input':
                 child_neuron = InputNeuron(child_neuron.id)
@@ -205,21 +193,11 @@ class PopulationPool:
         # Crossover connections
         # Randomly add matching genes from both parents - remember we may have multiple synapses in each connection
         for connection in best_parent.connections:
-            matching_connection = other_parent.get_connection(connection.innov_num)
-
-            if matching_connection is not None:  # his can lead to breaking way to outputs neurons
-                # Randomly choose where to inherit gene from
-                if (random.choice([True, False]) and
-                        child.get_neuron(matching_connection.input.id) is not None and
-                        child.get_neuron(matching_connection.output.id) is not None):
-                    inherited_connection = matching_connection
-                else:
-                    inherited_connection = connection  # deepcopy is useless because of inner structure of connection - it has links
+            ### YOUR CODE ###
 
             # No matching gene - is disjoint or excess
             # Inherit disjoint and excess genes from best parent
-            else:
-                inherited_connection = connection
+            ### YOUR CODE ###
 
             # clone  connection object and install it
             # here will be some checks on existing of needed neurons with ids for binding a new connection
@@ -227,30 +205,19 @@ class PopulationPool:
             # so there may exist matching by id connection, but it may connect very distant neurons, that's ids
             # doesn't exist in child (child inherits not more and not less number of neurons best parent has).
             # how to behace here - who know, may be just ignore or take the best parent connection - yes, ok, this way look upstairs - solved.
+
+
             # check-get input-neuron.
-            child_input_neuron = child.get_neuron(inherited_connection.input.id)
-            # if child_input_neuron is None:
-            #     raise Exception('No neuron found in child with id: {}'.format(connection.input.id))
+            ### YOUR CODE ###
 
             # check-get output-neuron
-            child_output_neuron = child.get_neuron(inherited_connection.output.id)
-            # if child_output_neuron is None:
-            #     raise Exception('No neuron found in child with id: {}'.format(connection.output.id))
+            ### YOUR CODE ###
 
             # clone connection to child
-            new_connection = Connection(deepcopy(inherited_connection.synapses), child_input_neuron,
-                                        child_output_neuron, inherited_connection.innov_num)
-            child.connections.append(new_connection)
-            child.innov_nums.add(new_connection.innov_num)
-            child.innov_num += 1
+            ### YOUR CODE ###
 
             # Apply rate of disabled gene being re-enabled
-            if not new_connection.enable:
-                is_reenabeled = random.uniform(0, 1) <= self.net_config['crossover_reenable_connection_rate']
-                enabled_in_best_parent = best_parent.get_connection(new_connection.innov_num).enable
-
-                if is_reenabeled or enabled_in_best_parent:
-                    new_connection.enabled = True
+            ### YOUR CODE ###
 
         return child
 
@@ -312,15 +279,15 @@ class PopulationPool:
                         connection.synapses[s_i][1] = np.random.normal(0, 1, 1).tolist()[0]
 
         if random.uniform(0, 1) < self.net_config['add_node_mutation_rate']:
-            net.add_node_mutation()  # 123
+            net.add_node_mutation()
 
         if random.uniform(0, 1) < self.net_config['add_connection_mutation_rate']:
-            net.add_connection_mutation()  # 123
+            net.add_connection_mutation()
 
     def run(self, generations_number):
         for generation_i in range(generations_number):  # new experiment
             if self.verbose:
-                print("cycle {generation_i}/{generations_number}")
+                print(f"cycle {generation_i}/{generations_number}")
 
             # Reproduce - make scpecies and mere the fitnesses-scores
             all_fitnesses = []
